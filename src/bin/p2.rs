@@ -28,7 +28,7 @@ use std::fs;
 use std::env;
 use std::str;
 use std::io::BufRead;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ops::Add;
 use structopt::StructOpt;
 
@@ -55,13 +55,13 @@ struct ContactInfo {
 }
 
 struct ContactInfoList {
-    contact_list: HashMap<u32, ContactInfo>
+    contact_list: BTreeMap<u32, ContactInfo>
 }
 
 impl ContactInfoList {
     fn new() -> Self {
         Self {
-            contact_list: HashMap::new()
+            contact_list: BTreeMap::new()
         }
     }
 
@@ -71,6 +71,7 @@ impl ContactInfoList {
         }
         else {
             self.contact_list.insert(_id, ContactInfo { name: _name.to_owned(), email: _email.to_owned() });
+            let _ = self.save();
         }
     }
 
@@ -92,8 +93,9 @@ impl ContactInfoList {
 
                     match _id.parse::<u32>() {
                         Ok(_id_num) => {
-                            self.add(_id_num, _name, _email);
-                            // self.contact_list.insert(_id_num, ContactInfo { name: _name.to_string(), email: _email.to_string() });
+                            if _name != "" {
+                                self.add(_id_num, _name, _email);
+                            }
                         },
                         _ => {}
                     }
@@ -118,12 +120,30 @@ impl ContactInfoList {
         }
     }
 
-    fn save(self) -> std::io::Result<()> {
-        let mut data_to_write = "id,_name,email\\r\\n".to_owned();
+    fn save(&mut self) -> std::io::Result<()> {
+        let mut data_to_write = "id,_name,email\r\n".to_owned();
         self.contact_list.iter().for_each(|(_id, _contact_info)| {
             data_to_write.push_str(format!("{},{},{}\r\n", _id, _contact_info.name, _contact_info.email).as_str());
         });
-        fs::write(DATA_TEMP_FILE_PATH, data_to_write)
+        fs::write(DATA_FILE_PATH, data_to_write)
+    }
+
+    fn remove(&mut self, _id: u32) -> bool {
+        if self.contact_list.contains_key(&_id) {
+            self.contact_list.remove(&_id);
+            let _ = self.save();
+            true
+        }
+        else {
+            println!("id({}) is not contained", _id);
+            false
+        }
+    }
+
+    fn edit(&mut self, _id: u32, _name: &str, _email: &str) {
+        if self.remove(_id) {
+            self.add(_id, _name, _email);
+        }
     }
 }
 
@@ -141,7 +161,21 @@ fn main() {
         "print" => contact_info_list.print(),
         "search" => {
             contact_info_list.search(opt.id);
+        },
+        "save" => {
+            _ = contact_info_list.save();
+        },
+        "add" => {
+            contact_info_list.add(opt.id, &*opt.name, &*opt.email);
+        },
+        "edit" => {
+            contact_info_list.edit(opt.id, &*opt.name, &*opt.email);
+        },
+        "remove" => {
+            contact_info_list.remove(opt.id);
+        },
+        _ => {
+            println!("Invalid command")
         }
-        _ => {}
     }
 }
